@@ -1,0 +1,7 @@
+# The deterministic core needs nothing. These are only for the agent layer.
+strands-agents>=0.1.0
+strands-agents-tools>=0.1.0
+
+# Optional, pick the one matching RATCHET_PROVIDER:
+#   strands-agents[ollama]     free, local, no account
+#   boto3                      for Bedrock (default)

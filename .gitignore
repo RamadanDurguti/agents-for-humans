@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+data/price_book.json
+data/report.json
+.DS_Store
