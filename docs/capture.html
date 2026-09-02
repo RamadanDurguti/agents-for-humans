@@ -1,0 +1,90 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Narration capture</title>
+<style>
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0b0f14;color:#e6edf5;margin:0;padding:40px;line-height:1.6}
+.wrap{max-width:780px;margin:0 auto}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 6px}
+p.sub{color:#93a4bb;margin:0 0 24px}
+button{font:inherit;font-weight:600;font-size:17px;padding:14px 26px;border-radius:10px;border:1px solid #1f6b64;background:rgba(79,209,197,.15);color:#4fd1c5;cursor:pointer;margin:0 10px 10px 0}
+button:disabled{opacity:.45;cursor:progress}
+ol{color:#93a4bb;font-size:14.5px;padding-left:20px}ol b{color:#e6edf5}
+#log{margin-top:22px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:#111823;border:1px solid #223046;border-radius:10px;padding:14px;max-height:360px;overflow:auto;white-space:pre-wrap}
+.ok{color:#56d364}.bad{color:#f8776b}
+</style></head><body><div class="wrap">
+<h1>Narration capture</h1>
+<p class="sub">Records the Ratchet demo narration using this computer&rsquo;s own speech engine, then sends it back for muxing.</p>
+<ol>
+<li>Press <b>Record the narration</b>.</li>
+<li>Chrome asks what to share. Choose <b>Entire Screen</b> (not a tab), make sure <b>Share system audio</b> is ON, press <b>Share</b>.</li>
+<li>That is all. Leave it completely alone for about 90 seconds &mdash; <b>do not press &ldquo;Stop sharing&rdquo;</b> and do not switch apps. It says DONE when the upload is finished.</li>
+</ol>
+<p style="color:#e3b341;font-size:13.5px">If it says SILENT, the system-audio switch was off. Press the button again and turn it on.</p>
+<p><button id="go" style="font-size:20px;padding:18px 34px">Record the narration</button></p>
+<div id="log">ready</div>
+</div>
+<script>
+var API = "https://qsgtymzjelteotcjkbol.supabase.co/functions/v1/ttscap/upload";
+var SEGMENTS = [
+[0,"A small shop buys from a handful of distributors. Every few months a new price list arrives, and nobody compares two hundred lines against the last one."],
+[9,"So one button does. This is the list we have been buying on, and the one that arrived this morning."],
+[14,"Four thousand four hundred euros a year. That is what this single list costs, at the volumes this shop actually sells."],
+[21,"Twelve movements, ranked. But not by percentage."],
+[25,"Look at the milk. It moved four point two percent, the smallest rise on the list, and it is the second most expensive thing that happened, because the shop sells twenty five thousand units of it a year. Percentages hide the money."],
+[34,"Every line carries its reasoning. The coffee broke the twenty eight percent margin target, and it gives the shelf price that would restore it."],
+[40,"It also separates a margin this list broke from one that was already under. A buyer needs to know which, or they take the wrong complaint to the supplier."],
+[46,"Underneath are the agent's tool calls. Six tools, built with the Strands Agents SDK. Notice the last one. Commit price book was not called. It never overwrites your history without approval."],
+[55,"Then it drafts the reply. Item code, old price, new price, the percentage, the volume, and one specific question."],
+[62,"And this is live. A different list, and every number recomputes in front of you."],
+[77,"The design decision is this. Every figure comes from code. The model chooses which tool to call and writes the message, but it never does arithmetic, because a buyer challenging a supplier has to point at the rule that fired."]
+];
+var logEl=document.getElementById("log");
+function log(m,c){var d=document.createElement("div");if(c)d.className=c;d.textContent=m;logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
+window.__STATUS__="ready";
+function status(s,c){window.__STATUS__=s;log(s,c);}
+function pickVoice(){var vs=speechSynthesis.getVoices()||[];window.__VOICES__=vs.map(function(v){return v.name+"|"+v.lang;});
+var want=["Samantha","Alex","Daniel","Karen","Serena","Google US English","Google UK English Male","Microsoft Aria Online (Natural) - English (United States)"];
+for(var i=0;i<want.length;i++){for(var j=0;j<vs.length;j++){if(vs[j].name===want[i])return vs[j];}}
+for(var k=0;k<vs.length;k++){if(/^en[-_]/i.test(vs[k].lang))return vs[k];}return vs[0]||null;}
+function speak(t,v){return new Promise(function(res){var u=new SpeechSynthesisUtterance(t);if(v)u.voice=v;u.rate=1;u.pitch=1;u.volume=1;u.onend=function(){res();};u.onerror=function(){res();};speechSynthesis.speak(u);});}
+async function peak(blob){try{var buf=await blob.arrayBuffer();var ac=new(window.AudioContext||window.webkitAudioContext)();var d=await ac.decodeAudioData(buf.slice(0));var ch=d.getChannelData(0);var m=0;for(var i=0;i<ch.length;i+=13){var v=Math.abs(ch[i]);if(v>m)m=v;}ac.close();return m;}catch(e){return -1;}}
+function b64(buf){var by=new Uint8Array(buf),s="",CH=32768;for(var i=0;i<by.length;i+=CH){s+=String.fromCharCode.apply(null,by.subarray(i,i+CH));}return btoa(s);}
+async function upload(blob){var all=b64(await blob.arrayBuffer());var SIZE=60000,seq=0;
+await fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({reset:true})});
+for(var i=0;i<all.length;i+=SIZE){var r=await fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({seq:seq,data:all.slice(i,i+SIZE)})});
+if(!r.ok){status("upload failed at chunk "+seq+" http "+r.status,"bad");return false;}seq++;}
+status("uploaded "+seq+" chunks, "+all.length+" chars, mime "+blob.type);return true;}
+async function run(testOnly){document.getElementById("go").disabled=true;
+function reenable(){document.getElementById("go").disabled=false;}
+try{
+var vs=speechSynthesis.getVoices();
+if(!vs||!vs.length){status("no speech voices available in this browser","bad");window.__STATUS__="NOVOICE";reenable();return;}
+if (!document.hasFocus()) { status("This Chrome window is not in front. Click anywhere on this page first, then press the button.","bad"); window.__STATUS__="NOFOCUS"; reenable(); return; }
+status("asking for screen + system audio");
+var stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:{suppressLocalAudioPlayback:false},systemAudio:'include',selfBrowserSurface:'exclude',surfaceSwitching:'exclude',monitorTypeSurfaces:'include'});
+var at=stream.getAudioTracks();
+if(!at.length){status("NO AUDIO TRACK - system audio was not shared. Run it again and switch it on.","bad");stream.getTracks().forEach(function(t){t.stop();});window.__STATUS__="NOAUDIO";reenable();return;}
+status("audio source: "+(at[0].label||"unknown"));
+if(/tab audio/i.test(at[0].label||"")){status("That is TAB audio, not system audio. The speech engine will not be captured. Press the button again and choose Entire Screen with system audio.","bad");stream.getTracks().forEach(function(t){t.stop();});window.__STATUS__="TABAUDIO";reenable();return;}
+var ended=false;
+at[0].addEventListener("ended",function(){ended=true;status("AUDIO TRACK ENDED - the share was stopped","bad");});
+var mime=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm";
+var rec=new MediaRecorder(new MediaStream(at),{mimeType:mime,audioBitsPerSecond:64000});var chunks=[];
+rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data);};
+var done=new Promise(function(res){rec.onstop=res;});rec.start(1000);status("recording "+mime);
+var voice=pickVoice();status("voice: "+(voice?voice.name+" ("+voice.lang+")":"DEFAULT"));
+if(testOnly){await speak("Testing one two three. This is the Tender Lens narration check.",voice);await new Promise(function(r){setTimeout(r,900);});}
+else{var t0=Date.now();
+for(var i=0;i<SEGMENTS.length;i++){if(ended){status("share stopped early at "+Math.round((Date.now()-t0)/1000)+"s","bad");break;}
+status("t="+Math.round((Date.now()-t0)/1000)+"s  segment "+(i+1)+"/"+SEGMENTS.length);await speak(SEGMENTS[i][1],voice);await new Promise(function(r){setTimeout(r,420);});}
+await new Promise(function(r){setTimeout(r,700);});}
+rec.stop();stream.getTracks().forEach(function(t){t.stop();});await done;
+var blob=new Blob(chunks,{type:mime});var p=await peak(blob);
+status("captured "+blob.size+" bytes, peak "+(p<0?"undecodable":p.toFixed(4)),p>0.01?"ok":"bad");
+if(p>=0&&p<=0.005){status("SILENT - system audio was not included","bad");window.__STATUS__="SILENT";reenable();return;}
+if(testOnly){status("test passed - now press Start full take","ok");window.__STATUS__="TEST_OK";reenable();return;}
+await upload(blob);status("DONE","ok");window.__STATUS__="DONE";
+}catch(e){var m=(e&&e.message)?e.message:String(e);status("error: "+m,"bad");window.__STATUS__="ERROR "+m;reenable();}}
+document.getElementById("go").addEventListener("click",function(){run(false);});
+speechSynthesis.getVoices();speechSynthesis.onvoiceschanged=function(){pickVoice();};
+</script></body></html>
