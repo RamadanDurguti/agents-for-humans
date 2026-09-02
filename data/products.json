@@ -1,0 +1,86 @@
+{
+  "4471": {
+    "shelf_price": 3.35,
+    "vat_rate": 0.18,
+    "monthly_units": 340,
+    "target_margin": 0.25
+  },
+  "4472": {
+    "shelf_price": 0.85,
+    "vat_rate": 0.08,
+    "monthly_units": 900,
+    "target_margin": 0.22
+  },
+  "4473": {
+    "shelf_price": 1.25,
+    "vat_rate": 0.18,
+    "monthly_units": 610,
+    "target_margin": 0.25
+  },
+  "4474": {
+    "shelf_price": 1.65,
+    "vat_rate": 0.18,
+    "monthly_units": 280,
+    "target_margin": 0.25
+  },
+  "4475": {
+    "shelf_price": 0.75,
+    "vat_rate": 0.18,
+    "monthly_units": 1240,
+    "target_margin": 0.28
+  },
+  "4476": {
+    "shelf_price": 0.99,
+    "vat_rate": 0.08,
+    "monthly_units": 2100,
+    "target_margin": 0.2
+  },
+  "4477": {
+    "shelf_price": 3.05,
+    "vat_rate": 0.18,
+    "monthly_units": 430,
+    "target_margin": 0.28
+  },
+  "4478": {
+    "shelf_price": 9.95,
+    "vat_rate": 0.18,
+    "monthly_units": 55,
+    "target_margin": 0.3
+  },
+  "4479": {
+    "shelf_price": 0.45,
+    "vat_rate": 0.18,
+    "monthly_units": 320,
+    "target_margin": 0.25
+  },
+  "4480": {
+    "shelf_price": 1.59,
+    "vat_rate": 0.18,
+    "monthly_units": 780,
+    "target_margin": 0.3
+  },
+  "4481": {
+    "shelf_price": 1.15,
+    "vat_rate": 0.18,
+    "monthly_units": 640,
+    "target_margin": 0.28
+  },
+  "4482": {
+    "shelf_price": 0.39,
+    "vat_rate": 0.18,
+    "monthly_units": 4200,
+    "target_margin": 0.3
+  },
+  "4483": {
+    "shelf_price": 3.89,
+    "vat_rate": 0.18,
+    "monthly_units": 190,
+    "target_margin": 0.28
+  },
+  "4484": {
+    "shelf_price": 6.75,
+    "vat_rate": 0.18,
+    "monthly_units": 120,
+    "target_margin": 0.28
+  }
+}
