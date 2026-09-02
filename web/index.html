@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ratchet — supplier price drift</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b23; --panel2:#1b2330; --line:#232c3a;
+    --ink:#e6edf3; --dim:#8b98a9; --dimmer:#5c6a7d;
+    --up:#f0883e; --down:#3fb950; --break:#f85149; --accent:#58a6ff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
+
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  h1{font-size:19px;margin:0;letter-spacing:-.2px}
+  .tag{font-size:12px;color:var(--dim)}
+  .sub{color:var(--dim);font-size:13px;margin:2px 0 20px}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dimmer)}
+  .stat .v{font:600 25px/1.25 var(--mono);margin-top:3px;letter-spacing:-.5px}
+  .stat .n{font-size:12px;color:var(--dim)}
+  .v.up{color:var(--up)} .v.down{color:var(--down)} .v.brk{color:var(--break)}
+
+  .cols{display:grid;grid-template-columns:1fr 380px;gap:16px;align-items:start}
+  @media(max-width:1000px){.cols{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--dimmer);
+    margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:600}
+
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--dimmer);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:var(--panel2)}
+  tbody tr[aria-selected=true]{background:#1d2a3d;box-shadow:inset 3px 0 0 var(--accent)}
+  .num{font-family:var(--mono);text-align:right;white-space:nowrap}
+  .sku{font-family:var(--mono);color:var(--dim);font-size:12px}
+  .nm{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .pill{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.03em;
+    padding:2px 7px;border-radius:99px;border:1px solid transparent;white-space:nowrap}
+  .pill.brk{color:var(--break);border-color:#5c2b2b;background:#2a1618}
+  .pill.old{color:var(--dim);border-color:#33404f;background:#1b222c}
+  .pill.new{color:var(--accent);border-color:#204066;background:#111d2e}
+  .pill.ok{color:var(--down);border-color:#1f4429;background:#122417}
+
+  .bar{height:4px;border-radius:2px;background:#22303f;margin-top:5px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--up)}
+
+  .panel-body{padding:15px}
+  .reasons{margin:0;padding:0;list-style:none}
+  .reasons li{position:relative;padding-left:15px;margin-bottom:9px;color:var(--ink);font-size:13px}
+  .reasons li:before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;
+    border-radius:50%;background:var(--dimmer)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:12.5px;margin-bottom:14px}
+  .kv dt{color:var(--dimmer)} .kv dd{margin:0;font-family:var(--mono)}
+  .empty{color:var(--dimmer);font-size:13px;padding:15px}
+
+  pre.draft{margin:0;padding:15px;font:12px/1.65 var(--mono);color:var(--ink);
+    white-space:pre-wrap;word-break:break-word;background:var(--panel2);max-height:340px;overflow:auto}
+
+  .trace{font:11.5px/1.6 var(--mono);padding:12px 15px;max-height:230px;overflow:auto}
+  .trace div{margin-bottom:5px;color:var(--dim)}
+  .trace b{color:var(--accent);font-weight:600}
+  .trace em{color:var(--dimmer);font-style:normal}
+
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  @media(max-width:700px){.io{grid-template-columns:1fr}}
+  .io label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--dimmer);margin-bottom:5px;font-weight:600}
+  textarea{width:100%;height:110px;background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);border-radius:7px;padding:9px 11px;
+    font:12px/1.5 var(--mono);resize:vertical}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  button{background:var(--accent);color:#07131f;border:0;border-radius:7px;
+    padding:8px 15px;font-size:13px;font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+  button:hover{filter:brightness(1.08)}
+  .note{font-size:12px;color:var(--dimmer)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Ratchet</h1>
+    <span class="tag">supplier prices only move one way. this agent notices.</span>
+  </header>
+  <p class="sub">Paste the price list that just arrived. It gets compared against what you have been
+  paying, and every movement is priced against how much you actually buy.</p>
+
+  <div class="io">
+    <div>
+      <label for="a">Price book — what you pay today</label>
+      <textarea id="a" spellcheck="false"></textarea>
+    </div>
+    <div>
+      <label for="b">Incoming list from the supplier</label>
+      <textarea id="b" spellcheck="false"></textarea>
+    </div>
+  </div>
+  <div class="row">
+    <button id="run">Review this list</button>
+    <button id="reset" class="ghost">Reload the example</button>
+    <span class="note" id="note"></span>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="cols">
+    <div>
+      <div class="card">
+        <h2>Movements, ranked by what they cost in a year</h2>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th>SKU</th><th>Item</th>
+            <th class="num">Was</th><th class="num">Now</th><th class="num">Move</th>
+            <th class="num">€ / year</th><th>Margin</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Draft reply to the supplier</h2>
+        <pre class="draft" id="draft"></pre>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Why this line is flagged</h2>
+        <div class="panel-body" id="detail"><p class="empty">Select a row.</p></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Tool calls</h2>
+        <div class="trace" id="trace"></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note" style="margin-top:26px">
+    Every figure on this page is computed by the same functions the agent calls as tools —
+    no model is involved in any number. Built for the
+    <a href="https://agentsforhumans.devpost.com/">Agents for Humans</a> hackathon with the
+    Strands Agents SDK. <a href="https://github.com/RamadanDurguti/agents-for-humans">Source</a>.
+  </p>
+</div>
+
+<script type="module">
+import { parsePriceList, indexBy, compare, assess, totals } from "./core.js";
+
+const $ = (s) => document.querySelector(s);
+const eur = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const int = (n) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+const EXAMPLE_A = `Kodi;Emri;Cmimi;Paketimi
+4471;Vaj luledielli 1L;2,10;12
+4472;Miell T400 1kg;0,58;10
+4473;Sheqer 1kg;0,79;10
+4474;Oriz 1kg;1,04;10
+4475;Makarona 500g;0,44;20
+4476;Qumesht UHT 1L;0,71;12
+4477;Kafe e bluar 200g;1,86;12
+4478;Vaj ulliri 750ml;5,90;6
+4479;Kripe 1kg;0,26;20
+4480;Tuna ne vaj 160g;0,94;24
+4481;Biskota kakao 300g;0,68;16
+4482;Uje mineral 1.5L;0,21;6
+4483;Leter higjienike 10x;2,35;8
+4484;Detergjent 3kg;4,10;4`;
+
+const EXAMPLE_B = `Kodi;Emri;Cmimi;Paketimi
+4471;Vaj luledielli 1L;2,28;12
+4472;Miell T400 1kg;0,58;10
+4473;Sheqer 1kg;0,86;10
+4474;Oriz 1kg;1,04;10
+4475;Makarona 500g;0,47;20
+4476;Qumesht UHT 1L;0,74;12
+4477;Kafe e bluar 200g;2,04;12
+4478;Vaj ulliri 750ml;5,72;6
+4479;Kripe 1kg;0,26;20
+4480;Tuna ne vaj 160g;0,99;24
+4481;Biskota kakao 300g;0,68;16
+4482;Uje mineral 1.5L;0,215;6
+4483;Leter higjienike 10x;2,49;8
+4485;Sapun duarsh 500ml;1,35;12`;
+
+/* Shelf prices, VAT and volumes are the shop's own data, not the supplier's.
+   In the deployed tool this comes from the till; here it is bundled so the
+   page runs with nothing behind it. */
+const PRODUCTS = {
+  "4471":{shelf_price:3.35,vat_rate:0.18,monthly_units:340,target_margin:0.25},
+  "4472":{shelf_price:0.85,vat_rate:0.08,monthly_units:900,target_margin:0.22},
+  "4473":{shelf_price:1.25,vat_rate:0.18,monthly_units:610,target_margin:0.25},
+  "4474":{shelf_price:1.65,vat_rate:0.18,monthly_units:280,target_margin:0.25},
+  "4475":{shelf_price:0.75,vat_rate:0.18,monthly_units:1240,target_margin:0.28},
+  "4476":{shelf_price:0.99,vat_rate:0.08,monthly_units:2100,target_margin:0.20},
+  "4477":{shelf_price:3.05,vat_rate:0.18,monthly_units:430,target_margin:0.28},
+  "4478":{shelf_price:9.95,vat_rate:0.18,monthly_units:55,target_margin:0.30},
+  "4479":{shelf_price:0.45,vat_rate:0.18,monthly_units:320,target_margin:0.25},
+  "4480":{shelf_price:1.59,vat_rate:0.18,monthly_units:780,target_margin:0.30},
+  "4481":{shelf_price:1.15,vat_rate:0.18,monthly_units:640,target_margin:0.28},
+  "4482":{shelf_price:0.39,vat_rate:0.18,monthly_units:4200,target_margin:0.30},
+  "4483":{shelf_price:3.89,vat_rate:0.18,monthly_units:190,target_margin:0.28},
+  "4484":{shelf_price:6.75,vat_rate:0.18,monthly_units:120,target_margin:0.28},
+};
+
+let FIND = [], MAXBAR = 1;
+
+function trace(steps){
+  $("#trace").innerHTML = steps.map(s =>
+    `<div><b>${s.t}</b>(${s.a}) <em>→ ${s.r}</em></div>`).join("");
+}
+
+function statCards(t){
+  const card = (k,v,cls,n) =>
+    `<div class="stat"><div class="k">${k}</div><div class="v ${cls||""}">${v}</div>
+     <div class="n">${n||""}</div></div>`;
+  $("#stats").innerHTML =
+    card("Annual exposure", "€"+eur(t.annual_exposure), "up", `${t.increases} lines went up`) +
+    card("Recovered", "€"+eur(Math.abs(t.annual_savings)), "down", `${t.decreases} line${t.decreases===1?"":"s"} came down`) +
+    card("Margin broken by this list", t.newly_broken, t.newly_broken?"brk":"", `${t.already_below} were already under target`) +
+    card("Net effect", (t.net_annual>=0?"+€":"−€")+eur(Math.abs(t.net_annual)),
+         t.net_annual>0?"up":"down", "per year, at current volumes");
+}
+
+function marginCell(f){
+  if (f.margin_after === null) return `<span class="pill old">no shelf data</span>`;
+  const pct = (f.margin_after*100).toFixed(1)+"%";
+  if (f.newly_broken) return `<span class="pill brk">${pct} · broken</span>`;
+  if (f.already_below) return `<span class="pill old">${pct} · was already under</span>`;
+  return `<span class="pill ok">${pct}</span>`;
+}
+
+function render(findings, t){
+  FIND = findings;
+  MAXBAR = Math.max(1, ...findings.map(f => Math.abs(f.annual_cost_delta)));
+  statCards(t);
+
+  $("#rows").innerHTML = findings.map((f,i) => {
+    const pct = f.delta_pct === null ? "—"
+      : `${f.delta_pct>0?"+":""}${(f.delta_pct*100).toFixed(1)}%`;
+    const w = Math.round(Math.abs(f.annual_cost_delta)/MAXBAR*100);
+    const col = f.annual_cost_delta >= 0 ? "var(--up)" : "var(--down)";
+    return `<tr data-i="${i}" tabindex="0">
+      <td class="sku">${f.sku}</td>
+      <td class="nm" title="${f.name}">${f.name}
+        ${f.kind==="new"?'<span class="pill new" style="margin-left:6px">new line</span>':""}</td>
+      <td class="num">${f.old_cost===null?"—":f.old_cost.toFixed(2)}</td>
+      <td class="num">${f.new_cost.toFixed(2)}</td>
+      <td class="num" style="color:${f.delta_pct>0?"var(--up)":f.delta_pct<0?"var(--down)":"var(--dim)"}">${pct}</td>
+      <td class="num">${f.annual_cost_delta===0?"—":(f.annual_cost_delta>0?"+":"−")+eur(Math.abs(f.annual_cost_delta))}
+        <div class="bar"><i style="width:${w}%;background:${col}"></i></div></td>
+      <td>${marginCell(f)}</td>
+    </tr>`;
+  }).join("");
+
+  $("#rows").querySelectorAll("tr").forEach(tr => {
+    const go = () => select(+tr.dataset.i);
+    tr.addEventListener("click", go);
+    tr.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){e.preventDefault();go();} });
+  });
+
+  if (findings.length) select(0); else $("#detail").innerHTML = '<p class="empty">Nothing moved on this list.</p>';
+  $("#draft").textContent = draft(findings, t);
+}
+
+function select(i){
+  $("#rows").querySelectorAll("tr").forEach(r => r.setAttribute("aria-selected", +r.dataset.i === i));
+  const f = FIND[i];
+  if (!f) return;
+  $("#detail").innerHTML = `
+    <dl class="kv">
+      <dt>SKU</dt><dd>${f.sku}</dd>
+      <dt>Supplier</dt><dd>${f.supplier || "—"}</dd>
+      <dt>Volume</dt><dd>${f.annual_units ? int(f.annual_units)+" units / year" : "not on file"}</dd>
+      ${f.shelf_price_needed!==null ? `<dt>Shelf needed</dt><dd>€${f.shelf_price_needed.toFixed(2)}</dd>` : ""}
+    </dl>
+    <ul class="reasons">${f.reasons.map(r => `<li>${r}</li>`).join("")}</ul>`;
+}
+
+function draft(findings, t){
+  const ups = findings.filter(f => f.kind === "increase").slice(0,4);
+  if (!ups.length) return "No price increases on this list.";
+  const L = [
+    "Subject: Price changes on your latest list","","Hello,","",
+    `Comparing your new list against the one we have been buying on, ${t.increases} lines have gone up. `+
+    `At our current volumes that is ${eur(t.annual_exposure)} EUR a year.`,"",
+    "The largest by value:",
+  ];
+  for (const f of ups){
+    let s = `  - ${f.sku} ${f.name}: ${f.old_cost.toFixed(2)} to ${f.new_cost.toFixed(2)} `+
+            `(${f.delta_pct>0?"+":""}${(f.delta_pct*100).toFixed(1)}%)`;
+    if (f.annual_units) s += `, ${int(f.annual_units)} units a year, ${eur(f.annual_cost_delta)} EUR`;
+    L.push(s);
+  }
+  L.push("","Can you tell us what is driving these, and whether the previous prices "+
+           "can be held on the lines above for the next quarter?","","Thank you,");
+  return L.join("\n");
+}
+
+function run(){
+  const a = $("#a").value, b = $("#b").value;
+  const oldLines = parsePriceList(a, "Alfa Distribution");
+  const newLines = parsePriceList(b, "Alfa Distribution");
+  const oldIx = indexBy(oldLines), newIx = indexBy(newLines);
+  const changes = compare(oldIx, newIx);
+  const moved = changes.filter(c => c.kind !== "unchanged");
+  const findings = assess(changes, PRODUCTS);
+  const t = totals(findings);
+
+  trace([
+    {t:"read_price_list", a:`supplier="Alfa Distribution"`, r:`${newLines.length} rows parsed`},
+    {t:"compare_to_price_book", a:`${Object.keys(newIx).length} skus`, r:`${moved.length} moved, ${changes.length-moved.length} unchanged`},
+    {t:"price_the_damage", a:"—", r:`${t.increases} up, ${t.decreases} down, €${eur(t.annual_exposure)}/yr exposure`},
+    {t:"check_margin", a:`${findings.filter(f=>f.margin_after!==null).length} skus with shelf data`, r:`${t.newly_broken} newly below target`},
+    {t:"commit_price_book", a:"—", r:"not called — waiting for approval"},
+  ]);
+
+  $("#note").textContent = `${newLines.length} rows read · ${moved.length} moved`;
+  render(findings, t);
+}
+
+$("#run").addEventListener("click", run);
+$("#reset").addEventListener("click", () => { $("#a").value = EXAMPLE_A; $("#b").value = EXAMPLE_B; run(); });
+$("#a").value = EXAMPLE_A; $("#b").value = EXAMPLE_B;
+run();
+</script>
+</body>
+</html>
